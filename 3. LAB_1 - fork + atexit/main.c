@@ -90,7 +90,7 @@ int main(int argc, char** argv)
 		printf("2.1 Children PID: \033[31m%3d\033[0m\n", getpid());
 		printf("2.2 Parent PID:   \033[31m%3d\033[0m\n", getppid());
 		printf("2.3 fork PID:     \033[31m%3d\033[0m\n", pid_2);
-
+		wait(&rv_2);
 		printf("Ожидание пока не завершит работу дочерний процесс!\n");
 		printf("PARENT: Код возврата потомка: \033[31m%d\033[0m\n", WEXITSTATUS(rv_2));
 		break;
