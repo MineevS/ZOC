@@ -63,7 +63,7 @@ int main(int argc, char** argv)
 	// vfork();
 	printf("Запущена процесс срабатывания функции: \033[36mvfork()\033[0m\n");
 	printf("Текущее состояние: \n");
-	printf("1. PID: %1d\n2. PPID: %1d\n", getpid(), getppid());
+	printf("1. PID: \033[31m%3d\033[0m\n2. PPID: \033[31m%3d\033[0m\n", getpid(), getppid());
 
 	pid_t pid_2;
 	int rv_2;
