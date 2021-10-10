@@ -4,16 +4,19 @@
 #include <stdlib.h> // For exit();
 #include <unistd.h> // getopt();
 #include <getopt.h> // getopt_long();
-#include <sys/stat.h> // For param files;
+#include <sys/stat.h> // For param files, chmod();
 #include <string.h>// strstok();
 #include <time.h> // Forasctime
 #include <sys/types.h> //
 #include <pwd.h>
 #include <grp.h>
 
+void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct dirent* entry, struct stat file_st);
+void func_write_in_arch(int argc,char** argv,int i, FILE* file_arch, struct stat file_st, size_t count_files);
 void fmode(mode_t mode, char* buf);
 int parse_to_int(nlink_t *source);
 void file_seek(FILE* file,int num_str, int stat);
+
 
 char *strrev(char *str)
 {
@@ -59,255 +62,332 @@ int main(int argc, char** argv)
 	struct stat file_st;
         int option_index = 0;
         static struct option long_options[] = {
-            {"add", required_argument, 0, 0},
-            {"append", 0, 0, 0},
-            {"delete", required_argument, 0, 0},
-            {"verbose", 0, 0, 0},
-            {"create", required_argument, 0, 'c'},
-            {"file", required_argument, 0, 0},
-	    {"help", no_argument, 0, 0},
-	    {"at",no_argument,0,0},// 7
-	    {"in",no_argument,0,0},// 8
-            {0, 0, 0, 0}
+            {"input", required_argument, 0, 'i'},//0
+            {"extract", required_argument , 0, 'e'},//1
+            {"stat", no_argument, 0, 's'},//2
+	    {"help", no_argument, 0, 0},//3
+	    {"delete",no_argument,0,0},// 4
+        {0, 0, 0, 0}
         };
 	
 	if((c = getopt_long_only(argc, argv, "abc:d:012", long_options, &option_index)) != -1)
 	{
-		if(option_index != 0) printf("%s - %d \n", long_options[option_index].name, option_index);
-		if(option_index == 0) printf("\033[1;31mПараметр\033[0m: %c;\n\033[1;31mАргумент\033[0m: %s;\n", c, optarg);
+		//if(option_index != 0) printf("%s - %d \n", long_options[option_index].name, option_index);
+		//if(option_index == 0) printf("\033[1;31mПараметр\033[0m: %c;\n\033[1;31mАргумент\033[0m: %s;\n", c, optarg);
 		
 		switch(option_index)
 		{
-		case(7):
-			printf("at file(s)\n");
+		case(0):
+			printf("input file(s)\n");
+			
+			func_input_in_arch(argc, argv, directory, dir, entry, file_st);
 			break;
-		case(8):
-			printf("in file(s)\n");
+		case(1):
+			printf("extract file(s)\n");
+
+			if(argc > 1)
+			{
+				printf("Запущен процесс извлечения файлов из архива.\n");
+				
+				int f = 0;
+
+				for(size_t i = 0; i < argc; i++)//Цикал аргументных имен архивов;
+				{
+					dir = opendir(directory);
+					if(!dir) exit(1);
+				
+					while((entry = readdir(dir)) != NULL)
+					{
+						 if(!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+
+						char file_name[strlen(entry->d_name)];
+						memset(file_name, 0, strlen(entry->d_name) + 1);
+						strncpy(file_name, entry->d_name, strlen(entry->d_name));
+
+						if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5)))
+						{
+							FILE *file_arch;
+							int fd = dirfd(dir);
+							struct stat file_arch_st;
+
+							if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
+							if((file_arch = fopen(file_name, "rb")) != 0)
+							{
+								f = 1;
+								fstatat(fd, file_name, &file_arch_st, 0);
+								
+								if(file_arch_st.st_size == 0)
+								{
+									printf("Файл пуст!\n");
+								}
+								else
+								{
+									printf("Файл не пуст!\n");
+									
+									for(size_t j = 0; j < argc; j++)
+									{
+										int fl = 1;
+										
+										if((stat(argv[j], &file_st))!= 0)
+										{
+											printf("Файл с именем %s уже существует в той директории, где находится и сам архив!\n", argv[j]);
+										}
+
+										size_t a = 0; long pos = 0;                          
+										fseek(file_arch,pos,SEEK_SET);   
+		 								// Читать счетчик
+										fread((void*)&a, sizeof(size_t),1,file_arch);
+
+										////////////////////////////////////////////
+										size_t len_name_file = 0;
+										char* buff = (char *)malloc(sizeof(char)*len_name_file);
+										size_t b, c, d;
+										size_t size_f_1 = 0;
+										size_t size_f_2 = 0;
+										
+										size_t fb=0;
+										mode_t fmode;
+											
+										for(size_t w = 0; w < a; w++)
+										{
+											
+											fread(&len_name_file, sizeof(size_t),1,file_arch);
+											memset(buff, 0, len_name_file + 1);
+											fread(buff, sizeof(char), len_name_file, file_arch);//Получение имени файла	
+											fread((void*)&b, sizeof(size_t), 1, file_arch);// Получение размера файла
+											
+											if(fl){
+												if((strcmp(argv[j], buff)) == 0){fl = 0;}
+												else{size_f_1 += b;}
+											}
+											
+											if((strcmp(argv[j], buff)) == 0){fb = b;}
+											size_f_2 += b;
+
+											mode_t mt;//Получение режима файла.
+											if((strcmp(argv[j], buff)) == 0)
+											{
+												fread(&fmode, sizeof(mode_t), 1, file_arch);// Получение режима файла
+											}else{
+												fread(&mt, sizeof(mode_t), 1, file_arch);
+											}
+											
+											c = ftell(file_arch);// Текущее положение курсора
+											fseek(file_arch, 0, SEEK_END);
+											d = ftell(file_arch);// Размер всего файла
+											fseek(file_arch, c, SEEK_SET);
+										}
+
+										if((((d - c) == size_f_2) && (!fl)))
+										{
+											printf("Создание файла: %s\n", argv[j]);
+											
+											fseek(file_arch, c + size_f_1, SEEK_SET);
+											// TODO;
+											int size_mas = fb;
+											char * mas = (char*)malloc(size_mas*sizeof(char));
+											memset(mas,0,sizeof(char)*size_mas + 1);
+											fread(mas, sizeof(char), fb, file_arch);
+											
+											if(strstr(argv[0], argv[j]) != NULL) continue;// argv[0]="./gdb", argv[j]="gdb"
+											
+											FILE* file_f;
+											if((file_f = fopen(argv[j], "w+b"))!= NULL){
+												
+												fwrite(mas,sizeof(char),fb, file_f);
+												
+												chmod(argv[j], fmode);
+											}
+											
+											fclose(file_f);
+										}
+									}
+								}
+
+								fclose(file_arch);
+							}
+						}
+					}
+					
+					closedir(dir);
+				}	
+			}
+
+			break;
+		case(2):
+			printf("stat archive: \n");
+		
+			if(argc > 1)
+			{
+				int f = 0;
+
+				for(size_t i = 0; i < argc; i++)//Цикал аргументных имен архивов;
+				{
+					dir = opendir(directory);
+					if(!dir) exit(1);
+				
+					while((entry = readdir(dir)) != NULL)
+					{
+						if(!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+
+						char file_name[strlen(entry->d_name)];
+						memset(file_name, 0, strlen(entry->d_name) + 1);
+						strncpy(file_name, entry->d_name, strlen(entry->d_name));
+
+						if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5)))
+						{
+							printf("Обнаружен архив: \033[1;33m%s\033[0m \n", argv[i]);
+							FILE *file_arch;
+							int fd = dirfd(dir);
+							struct stat file_arch_st;
+
+							if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
+							if((file_arch = fopen(file_name, "rb")) != 0)
+							{
+								f = 1;
+								fstatat(fd, file_name, &file_arch_st, 0);
+								
+								if(file_arch_st.st_size == 0)
+								{
+									printf("Архив пуст!\n");
+								}
+								else
+								{
+									//printf("Файл не пуст!\n");
+									
+									size_t a = 0; long pos = 0;                          
+									fseek(file_arch,pos,SEEK_SET);   
+		 							// Читать счетчик
+									fread((void*)&a, sizeof(size_t),1,file_arch);
+
+									////////////////////////////////////////////
+									size_t len_name_file = 0;
+									char* buff = (char *)malloc(sizeof(char)*len_name_file);
+									size_t b, c, d;
+									size_t size_f_1 = 0;
+									size_t size_f_2 = 0;
+									
+									size_t fb=0;
+									printf("Обнажено %zu файлов в архиве: \n", a);
+									
+									for(size_t w = 1; w <= a; w++)
+									{
+										fread(&len_name_file, sizeof(size_t),1,file_arch);
+										memset(buff, 0, len_name_file + 1);
+										fread(buff, sizeof(char), len_name_file, file_arch);//Получение имени файла
+										
+										fread((void*)&b, sizeof(size_t), 1, file_arch);// Получение размера файла
+			
+										size_f_2 += b;
+
+										mode_t mt;//Получение режима файла.
+										fread(&mt, sizeof(mode_t), 1, file_arch);
+										
+										char buffm[10];
+										memset(buffm, 0, 10);
+										fmode(mt, buffm);
+										
+										printf("\033[1;31m%zu\033[0m.%s size:\033[1;36m%zu\033[0m  mode:\033[1;34m%s\033[0m\n", w, buff, b, buffm);
+									}
+								}
+
+								fclose(file_arch);
+							}
+						}
+					}
+					
+					closedir(dir);
+				}	
+			}
+		
+			break;
+		case(3):
+			printf("help man:\n");
+			
+			printf("1. Добавление файлов в архив: -input file_1 ..., --input file_1 ...\n");//+
+			printf("2. Изьятия файлов из архива: -extract file_1 ..., --extract file_1 ...\n");//+
+			//printf("3. Удаление файлов из архива: -delete file_1 ..., --delete file_1 ...\n");//-
+			
+			printf("По умолчанию вызов команды с архивом и файлами автоматически добавляет файлы в архив!\n");
+			break;
+		case(4):
+			printf("delete file(s)\n");
+			
+			
 			break;
 		default:
 
 			break;
 		};
+	
 	}
-	else if((c = getopt(argc, argv, "a:b")) == -1)
+	else if((c = getopt(argc, argv, "a:b")) == -1)// Если отсутствуют флаги.
 	{
-		if(argc > 1)
+		func_input_in_arch(argc, argv, directory, dir, entry, file_st);
+	}
+	
+	return 0;
+}
+
+void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct dirent* entry, struct stat file_st)
+{
+	if(argc > 1)
+	{
+		printf("\x1b[1;32mЗапущен процесс создания или открытия архива!\x1b[0m\n");
+
+		//// Проверка наличия файла в директории:
+		dir = opendir(directory);
+		if(!dir) exit(-1);
+		int f = 0;
+		
+		for(size_t i = 1; i < argc; i++)// Цикал аргументных имен архивов; 
 		{
-			printf("\x1b[1;32mЗапущен процесс создания или открытия архива!\x1b[0m\n");
-			
-			// [1]: Требуется проверить есть ли файл: argv[1] - ?
-			
-			//// Проверка наличия файла в директории:
-			dir = opendir(directory);
-			if(!dir) exit(-1);
-
-			for(size_t i = 1; i < argc; i++)// Цикал аргументных имен архивов; 
+			// i ~ index_argc_file;
+			while((entry = readdir(dir)) != NULL)
 			{
-				// i ~ index_arcg_file;
+				if(!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+				
+				char file_name[strlen(entry->d_name)];
+				memset(file_name, 0, strlen(entry->d_name) + 1);
+				strncpy(file_name, entry->d_name, strlen(entry->d_name));
 
-				while((entry = readdir(dir)) != NULL)
+				if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5))) 
 				{
-					if(!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
-				
-					char file_name[strlen(entry->d_name)];
-					memset(file_name, 0, strlen(entry->d_name) + 1);
-					strncpy(file_name, entry->d_name, strlen(entry->d_name));
+					FILE *file_arch;
+					int fd = dirfd(dir);
+					struct stat file_arch_st;
+					int count_files = 0;
 
-					if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5))) 
+					if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
+
+					if((file_arch = fopen(file_name, "r+b")) != 0)
 					{
-						FILE *file_arch;
-						int fd = dirfd(dir);
-						struct stat file_arch_st;
-						int count_files = 0;
+						f = 1;
+						fstatat(fd, file_name, &file_arch_st, 0);
 
-						if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
-
-						/*if(strncmp(strrev(strdup(argv[i])), strrev(strdup(".kmb")), 4) == 0)
+						if(file_arch_st.st_size == 0)
 						{
-							if((file_arch = fopen(argv[i], "a+")) != NULL)
-							{
-								printf("12 \n");
-								fstatat(fd, argv[i], &file_st, 0);
-							}
-						}else{
-							if((file_arch = fopen(strncat(argv[i], ".kmb", 5), "a+")) != NULL)
-							{
-								printf("13 \n");
-								fstatat(fd, argv[i], &file_st, 0);
-
-							}
-						}*/
-
-						if((file_arch = fopen(file_name, "ab+")) != 0)
+							//printf("Файл пуст!\n");
+							func_write_in_arch(argc, argv, i, file_arch, file_st, 0);
+						}
+						else
 						{
-							fstatat(fd, file_name, &file_arch_st, 0);
+							//printf("Файл не пуст!\n");
+							//Обновить счетчик в двоичном файле
+							size_t a = 0; long pos = 0;                          
+							fseek(file_arch,pos,SEEK_SET);   
+		 					// Читать счетчик
+							fread((void*)&a, sizeof(size_t),1,file_arch);
 
-							if(file_arch_st.st_size == 0)
-							{
-								printf("Файл пуст!\n");
-							}
-							else
-							{
-								printf("Файл не пуст!\n");
-							}
-
-
-							FILE* file;
-							size_t i_buff = 0;
-
-							size_t count = 1;
-							char* buff = (char *)malloc(sizeof(char)*count);
-							memset(buff, 0, sizeof(char)*count + 1);
-
-							char** files_mas = (char**)calloc(0, sizeof(char*));
-
-							while(!feof(file_arch))
-							{
-								fread(buff, sizeof(char), count, file_arch);
-								//pread(file_arch, buff,sizeof(char)*count, i_buff);			
-								if((fopen(buff, "rb+"))!= 0) 
-								{
-									printf("Обнаружено  в %s наличие файла: %s \n", argv[i], buff);
-									count = 1;
-									//count_files++;
-									files_mas = (char**)realloc(files_mas, (++count_files)*sizeof(char*));
-									files_mas[count_files - 1] =(char*)calloc(strlen(buff), sizeof(char));
-									memset(files_mas[count_files - 1],0,strlen(buff) + 1);
-									strncpy(files_mas[count_files - 1], buff, strlen(buff)*sizeof(char));
-
-
-									i_buff += strlen(buff);
-									buff = (char *)realloc(buff, sizeof(char) * count);
-									memset(buff, 0,sizeof(char)*count + 1 );
-									//fseek(file_arch, strlen(buff), SEEK_SET);
-									if((file_arch_st.st_size - ftell(file_arch) )== 1) break;
-								}else{
-									count++;
-									buff = (char *)realloc(buff, sizeof(char) * count);
-									memset(buff, 0,sizeof(char)*count + 1 );
-									fseek(file_arch, i_buff, SEEK_SET);
-								}
-										// TODO;
-										//if(strcmp(buff, argv[j])) continue;
-							}
-
-						
-							for(size_t j = 1; j < argc; j++)// Цикл аргументных имен файлов
-							{
-								// TODO;
-								// argv[j]
-
-								if(j == i) continue;//  т. к. argv[i] - имя arch_file
-
-								for(size_t d = 0; d < count_files; d++)
-								{
-									if(strcmp(argv[j], files_mas[d]) != 0) continue;
-									// TODO;
-
-									printf("Обнаружено в  директории ../ и в параметрах программы %s  наличие файла: \033[35m%s\033[0m \n", argv[0], argv[j]);
-
-
-									//
-								}
-
-								
-
-
-
-								/*
-
-								if((file = fopen(argv[j], "rb+")) != 0)
-								{
-									stat(argv[j], &file_st);
-									//file_seek(file_arch, 1, 1);
-
-									printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
-									//fwrite(argv[j], strlen(argv[j]), 1, file_arch);
-									//fwrite("||\n", strlen("||\n"), 1, file_arch);
-									//fprintf(file_arch, "%s|%s\n", argv[j], (strcmp(strncat(strmemcp(argv[j]), "|\n", 3*sizeof(char)), strmemcp(file_arch->_IO_read_ptr)) != 0 ) ? strmemcp(file_arch->_IO_read_ptr) : "");
-									fwrite(argv[j], strlen(argv[j]), 1,file_arch);
-
-									fflush(file_arch);
-									//file_seek(file_arch, 2, 1);
-									//fwrite((long int*)file_st.st_size, sizeof(file_st.st_size), 1, file_arch);
-									//fwrite("||\n", strlen("||\n"), 1, file_arch);
-									char buf[255];
-									//sprintf(buf,"%lld" ,file_st.st_size);
-									//fprintf(file_arch, "%lld%s", file_st.st_size, (strcmp(file_arch->_IO_write_base, file_arch->_IO_read_ptr) != 0 ) ? strmemcp(file_arch->_IO_read_ptr): "" );
-									fflush(file_arch);
-									fseek(file_arch, 0, SEEK_END);
-									//fprintf(file_arch, "\n");
-
-
-									//fprintf(file_arch, "[%d]\n", ++count_file);
-
-									while(!feof(file))
-    									{
-										char* buffer = NULL;
-										size_t buf_size = 0;
-										size_t ch_s = 0;
-
-        									//ch_s = getline(&buffer, &buf_size, file);
-        									if(strlen(buffer) > 0)
-										{
-											//fprintf(file_arch, "%s", buffer);
-											fflush(file_arch);
-											
-										}
-    									}
-									
-								//	fprintf(file_arch, "\n");
-
-
-									lseek(file_arch, 0, SEEK_SET);
-
-									fclose(file);
-								}
-								else
-								{
-								}*/
-
-					            		}
-
-
-						}else{
-													}
-
-						
-						fclose(file_arch);
-					}
-					else
-					{
-				
-
-					
-
-
-
-
-
-						for(size_t k = 1; k < argc; k++){
-
-						//printf("Не обнаружен arch_file:\n Создать arch_file c именем: %s",argv[k]);
-						/*
-						switch(getchar())
-						{
-						case('Y'):
-							printf("\033[1;33m::Y::\033[0m");
-
-							// TODO;
-
-							break;
-						default:
-							break;
-						};
-						*/
-						
+							func_write_in_arch(argc, argv, i, file_arch, file_st, a);
 						}
 					}
-
 					
+					fclose(file_arch);
 				}
+			}
+
+			if(!f){// Если архив не обнаружен!	
 
 				if(strncmp(strrev(strmemcp(argv[i])),strrev(strmemcp(".kmb")), 4) != 0) continue;
 
@@ -324,316 +404,124 @@ int main(int argc, char** argv)
 
 					FILE* file_arch;
 
-					if((file_arch = fopen(argv[i], "wb+")) != 0)
+					if((file_arch = fopen(argv[i], "wb+")) != 0)// Работа с архиватором;
 					{
-						// fstatat
-						size_t count_files = 0;
-						for(size_t j = 1; j < argc; j++)// Цикл аргументных имен файлов
-						{
-							// TODO;
-							// argv[j]
-
-							if(j == i) continue;//  т. к. argv[i] - имя arch_file
-						/*
-							for(size_t d = 0; d < count_files; d++)
-							{
-								if(strcmp(argv[j], files_mas[d]) != 0) continue;
-								
-								// TODO;
-
-							printf("Обнаружено в  директории ../ и в параметрах программы %s  наличие файла: \033[35m%s\033[0m \n", argv[0], argv[j]);
-
-
-								//
-							}
-
-						*/		
-							FILE* file;
-							if(((file = fopen(argv[j], "rb")) != 0) && (count_files == 0))
-							{
-								stat(argv[j], &file_st);
-								//file_seek(file_arch, 1, 1);
-
-								printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
-								//fwrite(argv[j], strlen(argv[j]), 1, file_arch);
-								//fwrite("||\n", strlen("||\n"), 1, file_arch);
-								//fprintf(file_arch, "%s|%s\n", argv[j], (strcmp(strncat(strmemcp(argv[j]), "|\n", 3*sizeof(char)), strmemcp(file_arch->_IO_read_ptr)) != 0 ) ? strmemcp(file_arch->_IO_read_ptr) : "");
-								char* buff_file = (char*)malloc(file_st.st_size * sizeof(char));
-								fread(buff_file, sizeof(char), file_st.st_size, file);
-								//fpos_t prev;
-								//fgetpos(file_arch, &prev);
-								count_files++;
-								fwrite(&count_files,sizeof(size_t), 1, file_arch);
-								fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
-								fwrite(&file_st.st_size, sizeof(file_st.st_size), 1, file_arch);
-								fwrite(buff_file,sizeof(char),file_st.st_size, file_arch);
-								//fpos_t next;
-								//next.__pos = 100;
-								//next.__state.__count = 200;
-
-								//fgetpos(file_arch,&next);
-								//fwrite(&prev.__pos, sizeof(prev.__pos),1, file_arch);
-								//fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
-								//fwrite(&next.__pos, sizeof(prev.__pos), 1, file_arch);
-								fflush(file_arch);
-								//file_seek(file_arch, 2, 1);
-								//fwrite((long int*)file_st.st_size, sizeof(file_st.st_size), 1, file_arch);
-								//fwrite("||\n", strlen("||\n"), 1, file_arch);
-								//char buf[255];
-								//sprintf(buf,"%lld" ,file_st.st_size);
-								//fprintf(file_arch, "%lld%s", file_st.st_size, (strcmp(file_arch->_IO_write_base, file_arch->_IO_read_ptr) != 0 ) ? strmemcp(file_arch->_IO_read_ptr): "" );
-								//fflush(file_arch);
-								//fseek(file_arch, 0, SEEK_END);
-								//fprintf(file_arch, "\n");
-
-
-								//fprintf(file_arch, "[%d]\n", ++count_file);
-								/*
-								while(!feof(file))
-    								{
-									char* buffer = NULL;
-									size_t buf_size = 0;
-									size_t ch_s = 0;
-
-        								//ch_s = getline(&buffer, &buf_size, file);
-        								if(strlen(buffer) > 0)
-									{
-										//fprintf(file_arch, "%s", buffer);
-										fflush(file_arch);
-											
-									}
-    								}
-								*/
-	
-								//	fprintf(file_arch, "\n");
-
-
-									//lseek(file_arch, 0, SEEK_SET);
-
-									fclose(file);
-							}
-							else if(((file = fopen(argv[j], "rb")) != 0)&&(count_files > 0))
-							{
-								stat(argv[j], &file_st);
-								//file_seek(file_arch, 1, 1);
-
-								printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
-								//fwrite(argv[j], strlen(argv[j]), 1, file_arch);
-								//fwrite("||\n", strlen("||\n"), 1, file_arch);
-								//fprintf(file_arch, "%s|%s\n", argv[j], (strcmp(strncat(strmemcp(argv[j]), "|\n", 3*sizeof(char)), strmemcp(file_arch->_IO_read_ptr)) != 0 ) ? strmemcp(file_arch->_IO_read_ptr) : "");
-								char* buff_file = (char*)malloc(file_st.st_size * sizeof(char));
-								fread(buff_file, sizeof(char), file_st.st_size, file);
-								//fpos_t prev;
-								//fgetpos(file_arch, &prev);
-								count_files++;
-
-							//Обновить счетчик в двоичном файле
-							size_t a; long pos = 0;                          
-							fseek(file_arch,pos,SEEK_SET);   
-								 // Читать счетчик
-							fread((void*)&a, sizeof(size_t),1,file_arch);
-							a++;           // Увеличить в памяти
-							fseek(file_arch,pos,SEEK_SET);   // Записать обратно по тому же адресу
-							fwrite((void*)&a, sizeof(size_t),1,file_arch);
-
-							////////////////////////////////////////////
-						
-
-							size_t i_buff = ftell(file_arch);
-
-							size_t count = 1;
-							char* buff = (char *)malloc(sizeof(char)*count);
-							memset(buff, 0, sizeof(char)*count + 1);
-
-							char** files_mas = (char**)calloc(0, sizeof(char*));
-
-	
-							int file_open = 0;
-							while(!file_open)
-							{
-								fread(buff, sizeof(char), count, file_arch);
-								//pread(file_arch, buff,sizeof(char)*count, i_buff);			
-								if((fopen(buff, "rb+"))!= 0) 
-								{
-									file_open = 1;
-
-									printf("Обнаружено  в %s наличие файла: %s \n", argv[i], buff);
-									count = 1;
-									//count_files++;
-									files_mas = (char**)realloc(files_mas, (++count_files)*sizeof(char*));
-									files_mas[count_files - 1] =(char*)calloc(strlen(buff), sizeof(char));
-									memset(files_mas[count_files - 1],0,strlen(buff) + 1);
-									strncpy(files_mas[count_files - 1], buff, strlen(buff)*sizeof(char));
-
-
-									i_buff += strlen(buff);
-									buff = (char *)realloc(buff, sizeof(char) * count);
-									memset(buff, 0,sizeof(char)*count + 1 );
-									//fseek(file_arch, strlen(buff), SEEK_SET);
-									//if((file_arch_st.st_size - ftell(file_arch) )== 1) break;
-								}else{
-									count++;
-									buff = (char *)realloc(buff, sizeof(char) * count);
-									memset(buff, 0,sizeof(char)*count + 1 );
-									fseek(file_arch, i_buff, SEEK_SET);
-								}
-										// TODO;
-										//if(strcmp(buff, argv[j])) continue;
-							}
-
-
-							size_t b;
-							fread((void*)&b, sizeof(size_t), 1, file_arch);
-
-							size_t c = ftell(file_arch);
-
-							fseek(file_arch, 0, SEEK_END);
-
-							size_t d = ftell(file_arch);
-
-							if((d - c) == b)
-							{
-								fseek(file_arch, c, SEEK_SET);
-								// TODO;
-								char * mas = (char*)malloc(d*sizeof(char));
-								memset(mas,0,sizeof(char)*d + 1);
-								strncpy(file_arch->_IO_read_ptr, mas, d*sizeof(char));
-
-
-								fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
-								fwrite(&file_st.st_size, sizeof(file_st.st_size), 1, file_arch);					
-								//fwrite(&file_arch->_IO_read_ptr ,strlen(file_arch->_IO_read_ptr),1, file_arch);	
-								fseek(file_arch, 0, SEEK_END);
-								fwrite(mas, sizeof(char), d, file_arch);
-
-								fwrite(buff_file,sizeof(char),file_st.st_size, file_arch);
-								fflush(file_arch);
-							}
-
-
-
-								//fwrite(&count_files,sizeof(size_t), 1, file_arch);
-								//fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
-								//fwrite(&file_st.st_size, sizeof(file_st.st_size), 1, file_arch);
-								//fwrite(buff_file,sizeof(char),file_st.st_size, file_arch);
-								//fpos_t next;
-								//next.__pos = 100;
-								//next.__state.__count = 200;
-
-								//fgetpos(file_arch,&next);
-								//fwrite(&prev.__pos, sizeof(prev.__pos),1, file_arch);
-								//fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
-								//fwrite(&next.__pos, sizeof(prev.__pos), 1, file_arch);
-								fflush(file_arch);
-
-								fclose(file);
-	
-							}
-
-					 	}
-
+						func_write_in_arch(argc, argv, i, file_arch, file_st, 0);
 					}
-
 					break;
 				default:
 					break;
 				}
-
 			}
-		} 
-		else
-		{
-			printf("2: \n");
-			
-			dir = opendir(directory);
-
-			if(!dir)
-			{
-				perror("diropen");
-				exit(1);
-			}
-
-			while((entry = readdir(dir)) != NULL)
-			{
-				if(!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
-				
-				//printf("%d - %s [%d] %d \n", entry->d_ino, entry->d_name, entry->d_type, entry->d_reclen);
-				char file_name[strlen(entry->d_name)];
-				//strcpy(file_name, directory);
-				//if(strcmp(file_name, "\\")) strcat(file_name,"\\" );
-				//strcat(file_name, entry->d_name);
-				strncpy(file_name, entry->d_name, strlen(entry->d_name));
-				strncpy(file_name, file_name,strcspn(file_name, "."));
-				//stat(file_name,&file_st);
-
-				if((stat(file_name, &file_st)) != -1)
-				{
-					char mode[10];
-					fmode(file_st.st_mode, mode);
-					struct passwd* pwd;
-					pwd = getpwuid(file_st.st_uid);
-					if(pwd == NULL) continue;
-					struct group*  gro;
-					gro = getgrgid(file_st.st_gid);
-					
-					struct tm* timeinfo = localtime(&file_st.st_mtime);
-
-					printf("-%s  %lu  %s  %8s", mode, file_st.st_nlink, pwd->pw_name, gro->gr_name);
-					char buf_time[255];
-					strftime(buf_time, sizeof(buf_time), "%d %b %Y %H:%M", timeinfo);
-					
-					if(file_st.st_mode & S_IXUSR)
-					{
-					   printf(" %6ld  %2s\x1b[0;32;40m %-8s \x1b[0m \n", file_st.st_size, buf_time, file_name );
-					}else{
-						printf(" %6ld  %2s  %-8s  \n", file_st.st_size, buf_time, file_name );
-					}					
-				}
-			}
-
-			closedir(dir);
 		}
 	}
-	else
-	{
-		do{
-			switch(c)
-			{
-			case('a'):
-				printf("Arg is: %s ; \n", optarg);
-				break;
-			case('b'):
-				printf("FLAG b recieved  \n");
-				break;
-			case('?'):
-				error += 1;
-				printf("Uncnown FLAG \n");
-				break;
-			default:
-				printf("Uncnown FLAG \n");
-				dir = opendir(directory);
-
-				if(!dir)
-				{
-					perror("diropen");
-					exit(1);
-				}
-
-				while((entry = readdir(dir)) != NULL)
-				{
-					printf("%lu - %s [%d] %d \n", entry->d_ino, entry->d_name, entry->d_type, entry->d_reclen);
-				}
-
-				closedir(dir);
-				break;
-			}
-
-		}while((c = getopt(argc, argv, "a:b")) != -1);
-	}
-
-	return 0;
 }
 
+void func_write_in_arch(int argc,char** argv,int i, FILE* file_arch, struct stat file_st, size_t count_files)
+{
+	//size_t count_files = 0;
+	for(size_t j = 1; j < argc; j++)// Цикл аргументных имен файлов
+	{
+		// TODO;
+
+		if(j == i) continue;//  т. к. argv[i] - имя arch_file
+
+		FILE* file;
+		if(((file = fopen(argv[j], "rb")) != 0) && (count_files == 0))
+		{
+			stat(argv[j], &file_st);
+			printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
+			char* buff_file = (char*)malloc(file_st.st_size * sizeof(char));
+			fread(buff_file, sizeof(char), file_st.st_size, file);
+			count_files++;
+			fwrite(&count_files, sizeof(size_t), 1, file_arch);
+			size_t s = strlen(argv[j]);
+			fwrite(&s, sizeof(size_t), 1, file_arch);
+			fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
+			fwrite(&file_st.st_size, sizeof(file_st.st_size), 1, file_arch);
+			fwrite(&file_st.st_mode, sizeof(file_st.st_mode), 1, file_arch);
+			fwrite(buff_file,sizeof(char),file_st.st_size, file_arch);
+			fflush(file_arch);
+
+			fclose(file);
+		}
+		else if(((file = fopen(argv[j], "rb")) != 0)&&(count_files > 0))
+		{
+			stat(argv[j], &file_st);
+
+			printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
+			char* buff_file = (char*)malloc(file_st.st_size * sizeof(char));
+			fread(buff_file, sizeof(char), file_st.st_size, file);
+			count_files++;
+
+			//Обновить счетчик в двоичном файле
+			size_t a = 0; long pos = 0;                          
+			fseek(file_arch,pos,SEEK_SET);   
+		 	// Читать счетчик
+			fread((void*)&a, sizeof(size_t),1,file_arch);
+			a++; // Увеличить в памяти
+			fseek(file_arch,pos,SEEK_SET);   // Записать обратно по тому же адресу
+			fwrite((void*)&a, sizeof(size_t),1,file_arch);
+
+			////////////////////////////////////////////
+						
+			size_t i_buff = ftell(file_arch);
+
+			size_t count = 1;
+			char* buff = (char *)malloc(sizeof(char)*count);
+			memset(buff, 0, sizeof(char)*count + 1);
+
+			char** files_mas = (char**)calloc(0, sizeof(char*));
+			size_t b, c, d;
+			size_t size_f = 0;
+
+			for(size_t w = 1; w < a; w++)
+			{
+							
+				size_t len_name_file = 0;
+				fread(&len_name_file, sizeof(size_t),1,file_arch);
+				fread(buff, sizeof(char), len_name_file, file_arch);
+				fread((void*)&b, sizeof(size_t), 1, file_arch);
+				size_f += b;
+
+				mode_t mt;//Получение режима файла.
+				fread(&mt, sizeof(mode_t), 1, file_arch);
+								
+				c = ftell(file_arch);// Текущее положение курсора
+
+				fseek(file_arch, 0, SEEK_END);
+
+				d = ftell(file_arch);// Размер всего файла
+					
+				fseek(file_arch, c, SEEK_SET);
+			}
+
+			if((d - c) == size_f)
+			{
+				fseek(file_arch, c, SEEK_SET);
+				int cs = ftell(file_arch);
+				int size_mas = d - cs;
+				char * mas = (char*)malloc(size_mas*sizeof(char));
+				fread(mas, sizeof(char), size_mas, file_arch);
+				size_t st = 0;
+				st = strlen(argv[j]);
+				fseek(file_arch,cs, SEEK_SET);
+				fwrite(&st,sizeof(size_t),1, file_arch);
+				fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
+				fwrite(&file_st.st_size, sizeof(file_st.st_size), 1, file_arch);					
+				fwrite(&file_st.st_mode, sizeof(mode_t),1, file_arch);
+				fwrite(mas, sizeof(char), size_mas, file_arch);
+
+				fwrite(buff_file,sizeof(char),file_st.st_size, file_arch);
+				fflush(file_arch);
+			}
+
+			fflush(file_arch);
+
+			fclose(file);
+		}
+	}
+}
 
 void file_seek(FILE* file, int num_str, int stat)
 {
@@ -652,13 +540,6 @@ void file_seek(FILE* file, int num_str, int stat)
 			}
 
 			char c;
-
-			/*
-			while(feof(file) == EOF)
-			{
-				c = fgetc(file);
-			}
-			*/
 			char* buffer;
 			size_t bufsize = 0;
 			size_t char_size = 0;

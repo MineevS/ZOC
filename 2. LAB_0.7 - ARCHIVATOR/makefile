@@ -1,9 +1,9 @@
-all: test
+all: archiver
 
-test: main.c
+archiver: main.c
 	clang $< -o $@
 
-clean: test
+clean: archiver
 	rm $<
 
 gdb: main.c
