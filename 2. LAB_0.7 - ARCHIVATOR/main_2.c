@@ -307,7 +307,7 @@ int main(int argc, char** argv)
 			
 			printf("1. Добавление файлов в архив: -input file_1 ..., --input file_1 ...\n");//+
 			printf("2. Изьятия файлов из архива: -extract file_1 ..., --extract file_1 ...\n");//+
-			//printf("3. Удаление файлов из архива: -delete file_1 ..., --delete file_1 ...\n");//-
+			printf("3. Удаление файлов из архива: -delete file_1 ..., --delete file_1 ...\n");//-
 			
 			printf("По умолчанию вызов команды с архивом и файлами автоматически добавляет файлы в архив!\n");
 			break;
@@ -625,11 +625,11 @@ void func_write_in_arch(int argc,char** argv,int i, int fd_file_arch, struct sta
 					scanf("%s", buff_new_filename);
 					while(strlen(buff_new_filename) > 256)
 					{
-						printf("Введите новое имя файла для возможности сохранения файла в архив c неболее 255 символами!");
+						printf("Введите новое имя файла для возможности сохранения файла в архив c неболее 255 символами!: ");
 						scanf("%s", buff_new_filename);
 					}
 
-					printf("Данные учтены!");
+					printf("Данные учтены!\n");
 				}
 
 				read(fd_file_arch, (void*)&b, sizeof(size_t));
