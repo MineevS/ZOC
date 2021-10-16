@@ -10,13 +10,15 @@
 #include <sys/types.h> //
 #include <pwd.h>
 #include <grp.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/uio.h>
+#include <sys/io.h>
+//#include <io.h> // FOR SEEK_SET, SEEK_END;
 
 void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct dirent* entry, struct stat file_st);
-void func_write_in_arch(int argc,char** argv,int i, FILE* file_arch, struct stat file_st, size_t count_files);
+void func_write_in_arch(int argc,char** argv,int i, int fd_file_arch, struct stat file_st, size_t count_files);
 void fmode(mode_t mode, char* buf);
-int parse_to_int(nlink_t *source);
-void file_seek(FILE* file,int num_str, int stat);
-
 
 char *strrev(char *str)
 {
@@ -39,17 +41,6 @@ char* strmemcp(char* str)
 	strncpy(mem, str, strlen(str));
 
 	return mem;
-}
-
-size_t contains_symbol(char *symbols, char symbol){
-  size_t pos = 0;
-  if(symbols == NULL)
-    return 0;
-  while(*symbols != '\0'){
-    if(*symbols++ == symbol)
-      pos++;
-  }
-  return pos;
 }
 
 int args_strcmp(const char* buff, char** argv, int argc)
@@ -120,15 +111,14 @@ int main(int argc, char** argv)
 
 						if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5)))
 						{
-							FILE *file_arch;
-							int fd = dirfd(dir);
+							int fd_file_arch;
 							struct stat file_arch_st;
 
 							if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
-							if((file_arch = fopen(file_name, "rb")) != 0)
+							if((fd_file_arch = open(file_name, O_RDONLY)) != 0)
 							{
 								f = 1;
-								fstatat(fd, file_name, &file_arch_st, 0);
+								stat(file_name,&file_arch_st);
 								
 								if(file_arch_st.st_size == 0)
 								{
@@ -148,9 +138,9 @@ int main(int argc, char** argv)
 										}
 
 										size_t a = 0; long pos = 0;                          
-										fseek(file_arch,pos,SEEK_SET);   
+										lseek(fd_file_arch,pos,SEEK_SET);   
 		 								// Читать счетчик
-										fread((void*)&a, sizeof(size_t),1,file_arch);
+										read(fd_file_arch, (void*)&a, sizeof(size_t)*1);
 
 										////////////////////////////////////////////
 										size_t len_name_file = 0;
@@ -164,11 +154,10 @@ int main(int argc, char** argv)
 											
 										for(size_t w = 0; w < a; w++)
 										{
-											
-											fread(&len_name_file, sizeof(size_t),1,file_arch);
+											read(fd_file_arch,&len_name_file, sizeof(size_t)*1);
 											memset(buff, 0, len_name_file + 1);
-											fread(buff, sizeof(char), len_name_file, file_arch);//Получение имени файла	
-											fread((void*)&b, sizeof(size_t), 1, file_arch);// Получение размера файла
+											read(fd_file_arch, buff, sizeof(char)*len_name_file);//Получение имени файла	
+											read(fd_file_arch,( void*)&b, sizeof(size_t)*1);// Получение размера файла
 											
 											if(fl){
 												if((strcmp(argv[j], buff)) == 0){fl = 0;}
@@ -181,44 +170,44 @@ int main(int argc, char** argv)
 											mode_t mt;//Получение режима файла.
 											if((strcmp(argv[j], buff)) == 0)
 											{
-												fread(&fmode, sizeof(mode_t), 1, file_arch);// Получение режима файла
+												read(fd_file_arch, &fmode, sizeof(mode_t));// Получение режима файла
 											}else{
-												fread(&mt, sizeof(mode_t), 1, file_arch);
+												read(fd_file_arch, &mt, sizeof(mode_t));
 											}
 											
-											c = ftell(file_arch);// Текущее положение курсора
-											fseek(file_arch, 0, SEEK_END);
-											d = ftell(file_arch);// Размер всего файла
-											fseek(file_arch, c, SEEK_SET);
+											c = lseek(fd_file_arch, 0, SEEK_CUR);// Текущее положение курсора
+											lseek(fd_file_arch, 0, SEEK_END);
+											d = lseek(fd_file_arch, 0, SEEK_CUR);// Размер всего файла
+											lseek(fd_file_arch, c, SEEK_SET);
 										}
 
 										if((((d - c) == size_f_2) && (!fl)))
 										{
 											printf("Создание файла: %s\n", argv[j]);
 											
-											fseek(file_arch, c + size_f_1, SEEK_SET);
+											lseek(fd_file_arch, c + size_f_1, SEEK_SET);
 											// TODO;
 											int size_mas = fb;
 											char * mas = (char*)malloc(size_mas*sizeof(char));
 											memset(mas,0,sizeof(char)*size_mas + 1);
-											fread(mas, sizeof(char), fb, file_arch);
+											read(fd_file_arch, mas, sizeof(char)*fb);
 											
 											if(strstr(argv[0], argv[j]) != NULL) continue;// argv[0]="./gdb", argv[j]="gdb"
 											
-											FILE* file_f;
-											if((file_f = fopen(argv[j], "w+b"))!= NULL){
+											int file_f;
+											if((file_f = open(argv[j], O_RDWR))!= 0){
 												
-												fwrite(mas,sizeof(char),fb, file_f);
+												write(file_f, mas, sizeof(char)*fb);
 												
 												chmod(argv[j], fmode);
 											}
 											
-											fclose(file_f);
+											close(file_f);
 										}
 									}
 								}
 
-								fclose(file_arch);
+								close(fd_file_arch);
 							}
 						}
 					}
@@ -251,15 +240,14 @@ int main(int argc, char** argv)
 						if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5)))
 						{
 							printf("Обнаружен архив: \033[1;33m%s\033[0m \n", argv[i]);
-							FILE *file_arch;
-							int fd = dirfd(dir);
+							int fd_file_arch;
 							struct stat file_arch_st;
 
 							if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
-							if((file_arch = fopen(file_name, "rb")) != 0)
+							if((fd_file_arch = open(file_name, O_RDONLY)) != 0)
 							{
 								f = 1;
-								fstatat(fd, file_name, &file_arch_st, 0);
+								stat(file_name, &file_arch_st);
 								
 								if(file_arch_st.st_size == 0)
 								{
@@ -269,10 +257,10 @@ int main(int argc, char** argv)
 								{
 									//printf("Файл не пуст!\n");
 									
-									size_t a = 0; long pos = 0;                          
-									fseek(file_arch,pos,SEEK_SET);   
+									size_t a = 0;                         
+									lseek(fd_file_arch,0,SEEK_SET);   
 		 							// Читать счетчик
-									fread((void*)&a, sizeof(size_t),1,file_arch);
+									read(fd_file_arch,(void*)&a, sizeof(size_t));
 
 									////////////////////////////////////////////
 									size_t len_name_file = 0;
@@ -281,21 +269,20 @@ int main(int argc, char** argv)
 									size_t size_f_1 = 0;
 									size_t size_f_2 = 0;
 									
-									size_t fb=0;
 									printf("Обнажено %zu файлов в архиве: \n", a);
 									
 									for(size_t w = 1; w <= a; w++)
 									{
-										fread(&len_name_file, sizeof(size_t),1,file_arch);
+										read(fd_file_arch, &len_name_file, sizeof(size_t));
 										memset(buff, 0, len_name_file + 1);
-										fread(buff, sizeof(char), len_name_file, file_arch);//Получение имени файла
+										read(fd_file_arch, buff, sizeof(char)*len_name_file);//Получение имени файла
 										
-										fread((void*)&b, sizeof(size_t), 1, file_arch);// Получение размера файла
+										read(fd_file_arch, (void*)&b, sizeof(size_t));// Получение размера файла
 			
 										size_f_2 += b;
 
 										mode_t mt;//Получение режима файла.
-										fread(&mt, sizeof(mode_t), 1, file_arch);
+										read(fd_file_arch, &mt, sizeof(mode_t));
 										
 										char buffm[10];
 										memset(buffm, 0, 10);
@@ -305,7 +292,7 @@ int main(int argc, char** argv)
 									}
 								}
 
-								fclose(file_arch);
+								close(fd_file_arch);
 							}
 						}
 					}
@@ -329,7 +316,7 @@ int main(int argc, char** argv)
 
 			if(argc > 1)
 			{
-				printf("????o? ???y ??????.\n");
+				//printf("????o? ???y ??????.\n");
 				
 				int f = 0;
 
@@ -348,24 +335,23 @@ int main(int argc, char** argv)
 
 						if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5)))
 						{
-							FILE *file_arch;
-							int fd = dirfd(dir);
+							int fd_file_arch;
 							struct stat file_arch_st;
 
 							if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
 
-							if((file_arch = fopen(file_name, "rb")) != 0)
+							if((fd_file_arch = open(file_name, O_RDONLY)) != 0)
 							{
 								f = 1;
-								fstatat(fd, file_name, &file_arch_st, 0);
+								stat(file_name, &file_arch_st);
 								
 								if(file_arch_st.st_size == 0)
 								{
-									printf("?????");
+									//printf("?????");
 								}
 								else
 								{
-									printf("??????");
+									//printf("??????");
 									
 									for(size_t j = 0; j < argc; j++)
 									{
@@ -376,9 +362,9 @@ int main(int argc, char** argv)
 											//printf("??????s ?????????????? ????????\n", argv[j]);
 										}
 
-										size_t a = 0; long pos = 0;                          
-										fseek(file_arch,pos,SEEK_SET);   
-										fread((void*)&a, sizeof(size_t),1,file_arch);
+										size_t a = 0;                          
+										lseek(fd_file_arch,0,SEEK_SET);   
+										read(fd_file_arch,(void*)&a, sizeof(size_t));
 
 										////////////////////////////////////////////
 										size_t* len_name_file = (size_t*)malloc(a*sizeof(size_t));
@@ -395,20 +381,19 @@ int main(int argc, char** argv)
 
 										for(size_t w = 0; w < a; w++)
 										{	
-											//len_name_file[w] =(size_t)realloc(len_name_file,sizeof(size_t));
-											fread(&len_name_file[w], sizeof(size_t),1,file_arch);
+											read(fd_file_arch, &len_name_file[w], sizeof(size_t));
 											
 											buff[w] =(char*)malloc(len_name_file[w]*sizeof(char));
 											memset(buff[w], 0, len_name_file[w] + 1);
-											fread(buff[w], sizeof(char), len_name_file[w], file_arch);//????????
+											read(fd_file_arch, buff[w], sizeof(char)*len_name_file[w]);//????????
 											//fb[w] = (size_t) realloc(fb, sizeof(size_t));
-											fread(&fb[w], sizeof(size_t), 1, file_arch);// ?????? ???										
+											read(fd_file_arch, &fb[w], sizeof(size_t));// ?????? ???										
 											//fmode[w] = (mode_t) realloc(fmode, sizeof(mode_t));
-											fread(&fmode[w], sizeof(mode_t), 1, file_arch);// ?????????										
-											c = ftell(file_arch);// ?????? ???
-											fseek(file_arch, 0, SEEK_END);
-											d = ftell(file_arch);// Р???? ???
-											fseek(file_arch, c, SEEK_SET);
+											read(fd_file_arch, &fmode[w], sizeof(mode_t));// ?????????										
+											c = lseek(fd_file_arch, 0, SEEK_CUR);// ?????? ???
+											lseek(fd_file_arch, 0, SEEK_END);
+											d = lseek(fd_file_arch, 0, SEEK_CUR);// Р???? ???
+											lseek(fd_file_arch, c, SEEK_SET);
 										}
 
 										if(a == 0)continue;
@@ -416,22 +401,21 @@ int main(int argc, char** argv)
 										char* mas;
 										mas = (char*)malloc(sizeof(char)*(d - c));
 										memset(mas, 0, (d - c) + 1);
-										fread(mas, sizeof(char), (d - c), file_arch);
+										read(fd_file_arch, mas, sizeof(char)*(d - c));
 										int flg = 0;
-										fclose(file_arch);
+										close(fd_file_arch);
 
-										if((file_arch = fopen(file_name, "wb")) != 0)
+										if((fd_file_arch = open(file_name, O_RDWR| O_TRUNC)) != 0)
 										{
-											fwrite(&a, sizeof(size_t),1, file_arch);
+											write(fd_file_arch, &a, sizeof(size_t));
 											for(size_t w = 0; w < a; w++)
 											{
 												if(args_strcmp(buff[w], argv, argc) != 0)
 												{
-
-													fwrite(&len_name_file[w], sizeof(size_t),1,file_arch);
-													fwrite(buff[w], sizeof(char),len_name_file[w],file_arch);
-													fwrite(&fb[w], sizeof(size_t),1,file_arch);
-													fwrite(&fmode[w], sizeof(mode_t),1, file_arch);
+													write(fd_file_arch, &len_name_file[w], sizeof(size_t));
+													write(fd_file_arch, buff[w], sizeof(char)*len_name_file[w]);
+													write(fd_file_arch, &fb[w], sizeof(size_t));
+													write(fd_file_arch, &fmode[w], sizeof(mode_t));
 
 													if(fl){
 														size_f_1 +=fb[w];
@@ -444,23 +428,23 @@ int main(int argc, char** argv)
 													flg = w;
 													fl = 0;
 													size_t b_s = a-1;
-													size_t c_ = ftell(file_arch);
-													fseek(file_arch,0, SEEK_SET);
-													fwrite(&b_s, sizeof(size_t), 1, file_arch);
-													fflush(file_arch);
-													fseek(file_arch,c_, SEEK_SET);
+													size_t c_ = lseek(fd_file_arch, 0, SEEK_CUR);
+													lseek(fd_file_arch,0, SEEK_SET);
+													write(fd_file_arch, &b_s, sizeof(size_t));
+													fsync(fd_file_arch);
+													lseek(fd_file_arch,c_, SEEK_SET);
 												}
 											}
 											
 
-											fwrite(mas, sizeof(char), size_f_1, file_arch);
-											fwrite(mas+(size_f_1+fb[flg])*sizeof(char), sizeof(char), size_f_2, file_arch);
-											fflush(file_arch);
+											write(fd_file_arch, mas, sizeof(char)*size_f_1);
+											write(fd_file_arch, mas+(size_f_1+fb[flg])*sizeof(char), sizeof(char)*size_f_2);
+											fsync(fd_file_arch);
 										}
 									}
 								}
 
-								fclose(file_arch);
+								close(fd_file_arch);
 							}
 						}
 					}
@@ -469,9 +453,6 @@ int main(int argc, char** argv)
 				}	
 			}
 
-			break;
-
-			
 			break;
 		default:
 
@@ -491,7 +472,7 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 {
 	if(argc > 1)
 	{
-		printf("\x1b[1;32mЗапущен процесс создания или открытия архива!\x1b[0m\n");
+		printf("\x1b[1;32mЗапущен процесс создания архива!\x1b[0m\n");
 
 		//// Проверка наличия файла в директории:
 		dir = opendir(directory);
@@ -511,37 +492,36 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 
 				if(!strcmp(file_name, argv[i]) || !strcmp(file_name, strncat(strmemcp(argv[i]), ".kmb", 5))) 
 				{
-					FILE *file_arch;
-					int fd = dirfd(dir);
+					int fd_file_arch;
 					struct stat file_arch_st;
 					int count_files = 0;
 
 					if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
 
-					if((file_arch = fopen(file_name, "r+b")) != 0)
+					if((fd_file_arch = open(file_name, O_RDWR | O_CREAT, S_IRUSR|S_IWUSR)) != 0)
 					{
 						f = 1;
-						fstatat(fd, file_name, &file_arch_st, 0);
+						stat(file_name, &file_arch_st);
 
 						if(file_arch_st.st_size == 0)
 						{
 							//printf("Файл пуст!\n");
-							func_write_in_arch(argc, argv, i, file_arch, file_st, 0);
+							func_write_in_arch(argc, argv, i, fd_file_arch, file_st, 0);
 						}
 						else
 						{
 							//printf("Файл не пуст!\n");
 							//Обновить счетчик в двоичном файле
 							size_t a = 0; long pos = 0;                          
-							fseek(file_arch,pos,SEEK_SET);   
+							lseek(fd_file_arch,pos,SEEK_SET);   
 		 					// Читать счетчик
-							fread((void*)&a, sizeof(size_t),1,file_arch);
+							read(fd_file_arch,(void*)&a, sizeof(size_t));
 
-							func_write_in_arch(argc, argv, i, file_arch, file_st, a);
+							func_write_in_arch(argc, argv, i, fd_file_arch, file_st, a);
 						}
 					}
 					
-					fclose(file_arch);
+					close(fd_file_arch);
 				}
 			}
 
@@ -560,12 +540,14 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 				case('y'):
 					printf("y \n");
 
-					FILE* file_arch;
+					int fd_file_arch;
 
-					if((file_arch = fopen(argv[i], "wb+")) != 0)// Работа с архиватором;
+					if((fd_file_arch = open(argv[i], O_CREAT | O_RDWR, S_IRUSR|S_IWUSR )) != 0)// Работа с архиватором;//|S_IRGRP|S_IWGRP|S_IROTH|S_IXOTH
 					{
-						func_write_in_arch(argc, argv, i, file_arch, file_st, 0);
+						func_write_in_arch(argc, argv, i, fd_file_arch, file_st, 0);
 					}
+					
+					close(fd_file_arch);
 					break;
 				default:
 					break;
@@ -575,7 +557,7 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 	}
 }
 
-void func_write_in_arch(int argc,char** argv,int i, FILE* file_arch, struct stat file_st, size_t count_files)
+void func_write_in_arch(int argc,char** argv,int i, int fd_file_arch, struct stat file_st, size_t count_files)
 {
 	//size_t count_files = 0;
 	for(size_t j = 1; j < argc; j++)// Цикл аргументных имен файлов
@@ -584,62 +566,57 @@ void func_write_in_arch(int argc,char** argv,int i, FILE* file_arch, struct stat
 
 		if(j == i) continue;//  т. к. argv[i] - имя arch_file
 
-		FILE* file;
+		int file;
 		
-		if(((file = fopen(argv[j], "rb")) != 0) && (count_files == 0))
+		if(((file = open(argv[j], O_RDONLY)) != 0) && (count_files == 0))
 		{
-			stat(argv[j], &file_st);
+			if(stat(argv[j], &file_st) !=0 )continue;
+			
 			printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
 			char* buff_file = (char*)malloc(file_st.st_size * sizeof(char));
-			fread(buff_file, sizeof(char), file_st.st_size, file);
+			read(file, buff_file, sizeof(char)*file_st.st_size);
 			count_files++;
-			fwrite(&count_files, sizeof(size_t), 1, file_arch);
+			write(fd_file_arch, &count_files, sizeof(size_t));
 			size_t s = strlen(argv[j]);
-			fwrite(&s, sizeof(size_t), 1, file_arch);
-			fwrite(argv[j], sizeof(char), strlen(argv[j]), file_arch);
-			fwrite(&file_st.st_size, sizeof(file_st.st_size), 1, file_arch);
-			fwrite(&file_st.st_mode, sizeof(file_st.st_mode), 1, file_arch);
-			fwrite(buff_file,sizeof(char),file_st.st_size, file_arch);
-			fflush(file_arch);
+			write(fd_file_arch, &s, sizeof(size_t));
+			write(fd_file_arch, argv[j], sizeof(char)*strlen(argv[j]));
+			write(fd_file_arch, &file_st.st_size, sizeof(file_st.st_size));
+			write(fd_file_arch, &file_st.st_mode, sizeof(file_st.st_mode));
+			write(fd_file_arch, buff_file, sizeof(char)*file_st.st_size);
+			fsync(fd_file_arch);
 
-			fclose(file);
+			close(file);
 		}
-		else if(((file = fopen(argv[j], "rb")) != 0)&&(count_files > 0))
+		else if(((file = open(argv[j], O_RDONLY)) != 0)&&(count_files > 0))
 		{
-			stat(argv[j], &file_st);
+			if(stat(argv[j], &file_st) != 0) continue;
 
 			printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
 			char* buff_file = (char*)malloc(file_st.st_size * sizeof(char));
-			fread(buff_file, sizeof(char), file_st.st_size, file);
+			read(file, buff_file, sizeof(char)*file_st.st_size);
 			count_files++;
 
 			//Обновить счетчик в двоичном файле
 			size_t a = 0; long pos = 0;                          
-			fseek(file_arch,pos,SEEK_SET);   
+			lseek(fd_file_arch,pos,SEEK_SET);   
 		 	// Читать счетчик
-			fread((void*)&a, sizeof(size_t),1,file_arch);
+			read(fd_file_arch,(void*)&a, sizeof(size_t));
 			a++; // Увеличить в памяти
-			fseek(file_arch,pos,SEEK_SET);   // Записать обратно по тому же адресу
-			fwrite((void*)&a, sizeof(size_t),1,file_arch);
+			lseek(fd_file_arch,pos,SEEK_SET);   // Записать обратно по тому же адресу
+			write(fd_file_arch,(void*)&a, sizeof(size_t));
 
 			////////////////////////////////////////////
-						
-			size_t i_buff = ftell(file_arch);
-
-			size_t count = 1;
-			char* buff = (char *)malloc(sizeof(char)*count);
-			memset(buff, 0, sizeof(char)*count + 1);
-
+			char* buff = (char *)malloc(sizeof(char));
+			memset(buff, 0, sizeof(char) + 1);
 			char** files_mas = (char**)calloc(0, sizeof(char*));
 			size_t b, c, d;
 			size_t size_f = 0;
 			char buff_new_filename[256] = {0};
 			for(size_t w = 1; w < a; w++)
 			{
-							
 				size_t len_name_file = 0;
-				fread(&len_name_file, sizeof(size_t),1,file_arch);
-				fread(buff, sizeof(char), len_name_file, file_arch);
+				read(fd_file_arch, &len_name_file, sizeof(size_t));
+				read(fd_file_arch, buff, sizeof(char)*len_name_file);
 
 				if(strcmp(buff, argv[j]) == 0)
 				{
@@ -655,93 +632,55 @@ void func_write_in_arch(int argc,char** argv,int i, FILE* file_arch, struct stat
 					printf("Данные учтены!");
 				}
 
-				fread((void*)&b, sizeof(size_t), 1, file_arch);
+				read(fd_file_arch, (void*)&b, sizeof(size_t));
 				size_f += b;
 
 				mode_t mt;//Получение режима файла.
-				fread(&mt, sizeof(mode_t), 1, file_arch);
+				read(fd_file_arch, &mt, sizeof(mode_t));
 								
-				c = ftell(file_arch);// Текущее положение курсора
+				c = lseek(fd_file_arch, 0, SEEK_CUR);// Текущее положение курсора
 
-				fseek(file_arch, 0, SEEK_END);
+				lseek(fd_file_arch, 0, SEEK_END);
 
-				d = ftell(file_arch);// Размер всего файла
+				d = lseek(fd_file_arch, 0, SEEK_CUR);// Размер всего файла
 					
-				fseek(file_arch, c, SEEK_SET);
+				lseek(fd_file_arch, c, SEEK_SET);
 			}
 
 			if((d - c) == size_f)
 			{
-				fseek(file_arch, c, SEEK_SET);
-				int cs = ftell(file_arch);
+				lseek(fd_file_arch, c, SEEK_SET);
+				int cs = lseek(fd_file_arch, 0, SEEK_CUR);
 				int size_mas = d - cs;
 				char * mas = (char*)malloc(size_mas*sizeof(char));
-				fread(mas, sizeof(char), size_mas, file_arch);
-				fseek(file_arch,cs, SEEK_SET);
+				read(fd_file_arch, mas, sizeof(char)*size_mas);
+				lseek(fd_file_arch,cs, SEEK_SET);
 				size_t st = 0;
 
 				if(strlen(buff_new_filename) >0)
 				{
-
 					st = strlen(buff_new_filename);
-					fwrite(&st,sizeof(size_t),1, file_arch);
-					fwrite(buff_new_filename, sizeof(char), st, file_arch);
+					write(fd_file_arch, &st,sizeof(size_t));
+					write(fd_file_arch, buff_new_filename, sizeof(char)*st);
 
 				}
 				else
 				{
 					st = strlen(argv[j]);
-					fwrite(&st,sizeof(size_t),1, file_arch);
-					fwrite(argv[j], sizeof(char), st, file_arch);
+					write(fd_file_arch, &st, sizeof(size_t));
+					write(fd_file_arch, argv[j], sizeof(char)*st);
 				}
 
-				fwrite(&file_st.st_size, sizeof(file_st.st_size), 1, file_arch);					
-				fwrite(&file_st.st_mode, sizeof(mode_t),1, file_arch);
-				fwrite(mas, sizeof(char), size_mas, file_arch);
+				write(fd_file_arch, &file_st.st_size, sizeof(file_st.st_size));					
+				write(fd_file_arch, &file_st.st_mode, sizeof(mode_t));
+				write(fd_file_arch, mas, sizeof(char)*size_mas);
 
-				fwrite(buff_file,sizeof(char),file_st.st_size, file_arch);
-				fflush(file_arch);
+				write(fd_file_arch, buff_file, sizeof(char)*file_st.st_size);
+				fsync(fd_file_arch);
 			}
 
-			fflush(file_arch);
-
-			fclose(file);
+			close(file);
 		}
-	}
-}
-
-void file_seek(FILE* file, int num_str, int stat)
-{
-	fflush(file);
-	fseek(file, 0, SEEK_SET);
-
-	if(stat == 1)
-	{
-		int size_n = 0;
-		
-		for(size_t i = 0; i < num_str; i++)
-		{
-			if(feof(file))
-			{ 
-				break;
-			}
-
-			char c;
-			char* buffer;
-			size_t bufsize = 0;
-			size_t char_size = 0;
-
-			char_size = getdelim(&buffer, &bufsize,'\n' , file);
-
-			if(strlen(buffer) > 0) size_n++;
-			
-			if(num_str == size_n)
-			{
-				fseek(file, ftell(file) - 1*sizeof(char), SEEK_SET);
-			}
-
-		}
-		
 	}
 }
 
@@ -755,13 +694,3 @@ void fmode(mode_t mode, char* buf)
 	}
 	buf[9] = '\0';
 }
-
-int parse_to_int(nlink_t *source)
-{
-  int buffer_size = sizeof(*source);
-  char buffer[buffer_size];
-  snprintf(&buffer[0], buffer_size, "%lu", (unsigned long)source);
-  int val = atoi(buffer);
-  return val;
-}
-

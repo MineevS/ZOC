@@ -1,6 +1,6 @@
-all: test
+all: chmod
 
-test: main.c
+chmod: main.c
 	clang $< -o $@
 
 gdb: main.c
