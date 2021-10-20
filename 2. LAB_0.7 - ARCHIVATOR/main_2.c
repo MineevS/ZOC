@@ -122,19 +122,21 @@ int main(int argc, char** argv)
 								
 								if(file_arch_st.st_size == 0)
 								{
-									printf("Файл пуст!\n");
+									//printf("Файл пуст!\n");
 								}
 								else
 								{
-									printf("Файл не пуст!\n");
+									//printf("Файл не пуст!\n");
 									
-									for(size_t j = 0; j < argc; j++)
+									for(size_t j = 1; j < argc; j++)
 									{
 										int fl = 1;
 										
-										if((stat(argv[j], &file_st))!= 0)
+										if(((stat(argv[j], &file_st))!= -1) && (strncmp(argv[j],"-",1) != 0) && strcmp(argv[i],argv[j]) != 0)
 										{
-											printf("Файл с именем %s уже существует в той директории, где находится и сам архив!\n", argv[j]);
+											printf("Файл с именем \033[1;32m%s[0m уже существует в той директории, где находится и сам архив!\n", argv[j]);
+											printf("Файл \033[1;32m%s\033[0m - не извлечен!\n", argv[j]);
+											continue;
 										}
 
 										size_t a = 0; long pos = 0;                          
@@ -149,8 +151,8 @@ int main(int argc, char** argv)
 										size_t size_f_1 = 0;
 										size_t size_f_2 = 0;
 										
-										size_t fb=0;
-										mode_t fmode;
+										size_t fb = 0;
+										mode_t fmode = 0;
 											
 										for(size_t w = 0; w < a; w++)
 										{
@@ -195,7 +197,7 @@ int main(int argc, char** argv)
 											if(strstr(argv[0], argv[j]) != NULL) continue;// argv[0]="./gdb", argv[j]="gdb"
 											
 											int file_f;
-											if((file_f = open(argv[j], O_RDWR))!= 0){
+											if((file_f = open(argv[j], O_RDWR | O_CREAT, S_IRUSR| S_IWUSR| S_IRGRP))!= 0){
 												
 												write(file_f, mas, sizeof(char)*fb);
 												
@@ -309,10 +311,13 @@ int main(int argc, char** argv)
 			printf("2. Изьятия файлов из архива: -extract file_1 ..., --extract file_1 ...\n");//+
 			printf("3. Удаление файлов из архива: -delete file_1 ..., --delete file_1 ...\n");//-
 			
+			
+			printf("ВАЖНО: В случае \033[1;31mпервичного\033[0m добавления файлов в архив(т. е. создание архива и добавление файлов в созданный архив.) \n в аргументах командной строки должено быть указано имя архив - файла с типом \033[1;32m\".kmb\"\033[0m явно!\n");
+			printf("ВАЖНО: В случае уже существующего архива для добавления файлов в архив можно не указывать \033[1;32m\".kmb\"\033[0m в аргументах!\n");
 			printf("По умолчанию вызов команды с архивом и файлами автоматически добавляет файлы в архив!\n");
 			break;
 		case(4):
-			printf("delete file(s)\n");
+			
 
 			if(argc > 1)
 			{
@@ -352,6 +357,7 @@ int main(int argc, char** argv)
 								else
 								{
 									//printf("??????");
+									int flg = 0;
 									
 									for(size_t j = 0; j < argc; j++)
 									{
@@ -402,7 +408,7 @@ int main(int argc, char** argv)
 										mas = (char*)malloc(sizeof(char)*(d - c));
 										memset(mas, 0, (d - c) + 1);
 										read(fd_file_arch, mas, sizeof(char)*(d - c));
-										int flg = 0;
+										
 										close(fd_file_arch);
 
 										if((fd_file_arch = open(file_name, O_RDWR| O_TRUNC)) != 0)
@@ -433,14 +439,24 @@ int main(int argc, char** argv)
 													write(fd_file_arch, &b_s, sizeof(size_t));
 													fsync(fd_file_arch);
 													lseek(fd_file_arch,c_, SEEK_SET);
+													
+													if(w){
+														printf("delete file %s!\n", buff[w]);
+													}
+													
 												}
 											}
 											
-
+											
+											
 											write(fd_file_arch, mas, sizeof(char)*size_f_1);
 											write(fd_file_arch, mas+(size_f_1+fb[flg])*sizeof(char), sizeof(char)*size_f_2);
 											fsync(fd_file_arch);
 										}
+									}
+									
+									if(!flg){
+										printf("В архиве удаляемого файла не обнаружено!\n");
 									}
 								}
 
@@ -472,12 +488,11 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 {
 	if(argc > 1)
 	{
-		printf("\x1b[1;32mЗапущен процесс создания архива!\x1b[0m\n");
-
 		//// Проверка наличия файла в директории:
 		dir = opendir(directory);
 		if(!dir) exit(-1);
 		int f = 0;
+		int num = 0;
 		
 		for(size_t i = 1; i < argc; i++)// Цикал аргументных имен архивов; 
 		{
@@ -498,7 +513,7 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 
 					if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
 
-					if((fd_file_arch = open(file_name, O_RDWR | O_CREAT, S_IRUSR|S_IWUSR)) != 0)
+					if((fd_file_arch = open(file_name, O_RDWR)) != 0)
 					{
 						f = 1;
 						stat(file_name, &file_arch_st);
@@ -522,13 +537,16 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 					}
 					
 					close(fd_file_arch);
+					
 				}
 			}
 
 			if(!f){// Если архив не обнаружен!	
 
-				if(strncmp(strrev(strmemcp(argv[i])),strrev(strmemcp(".kmb")), 4) != 0) continue;
-
+				if(strncmp(strrev(strmemcp(argv[i])),strrev(strmemcp(".kmb")), 4) != 0){num +=1; continue;}
+				
+				printf("\x1b[1;32mЗапущен процесс создания архива!\x1b[0m\n");
+				
 				printf("Архив с именем \033[35m%s\033[0m не обнаружен в данной директории\n", argv[i]);
 				printf("Создать архив с именем \033[32m%s\033[0m: ", argv[i]);
 
@@ -542,7 +560,7 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 
 					int fd_file_arch;
 
-					if((fd_file_arch = open(argv[i], O_CREAT | O_RDWR, S_IRUSR|S_IWUSR )) != 0)// Работа с архиватором;//|S_IRGRP|S_IWGRP|S_IROTH|S_IXOTH
+					if((fd_file_arch = open(argv[i], O_CREAT | O_RDWR, S_IRUSR | S_IWUSR )) != 0)// Работа с архиватором;//|S_IRGRP|S_IWGRP|S_IROTH|S_IXOTH
 					{
 						func_write_in_arch(argc, argv, i, fd_file_arch, file_st, 0);
 					}
@@ -553,6 +571,14 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 					break;
 				}
 			}
+		}
+		
+		if(num == argc-1){
+			printf("В командной строке в качестве аргумента не обнаружен файл с типом \".kmb\".\n");
+			printf("В рабочей директории необнаружен файл %s.kmb\".\n", argv[1]);
+			printf("В случае \033[1;31mпервичного\033[0m добавления файлов в архив(т. е. создание архива и добавление файлов в созданный архив.) в аргументах командной строки должено быть указано имя архив - файла с типом \033[1;32m\".kmb\"\033[0m явно!\n");
+			printf("В случае уже существующего архива для добавления файлов в архив можно не указывать \033[1;32m\".kmb\"\033[0m в аргументах!");
+			printf("Работа программы прекращена!\n");
 		}
 	}
 }
@@ -589,7 +615,13 @@ void func_write_in_arch(int argc,char** argv,int i, int fd_file_arch, struct sta
 		}
 		else if(((file = open(argv[j], O_RDONLY)) != 0)&&(count_files > 0))
 		{
-			if(stat(argv[j], &file_st) != 0) continue;
+			if (strncmp(argv[j], "-",1) == 0) continue;
+			
+			if(stat(argv[j], &file_st) != 0){
+				printf("При попытке добавление файла %s в архив было обнаружено, что файла не существует в рабочей директории!\n", argv[j]);
+				printf("Файл %s \033[1;33mНе добавлен в архив\033[0m!\n", argv[j]);
+				continue;
+			};
 
 			printf("Успешно был открыт файл: \033[1;31m%s \033[0m\n", argv[j]);
 			char* buff_file = (char*)malloc(file_st.st_size * sizeof(char));
@@ -621,11 +653,20 @@ void func_write_in_arch(int argc,char** argv,int i, int fd_file_arch, struct sta
 				if(strcmp(buff, argv[j]) == 0)
 				{
 					printf("В архиве обнаружен файл с похожим именем %s\n", argv[j]);
-					printf("Введите новое имя файла для возможности сохранения файла в архив!: ");
+					printf("Введите новое имя файла для возможности сохранения файла в архивс учетом типа файла!: ");
 					scanf("%s", buff_new_filename);
-					while(strlen(buff_new_filename) > 256)
+					while(strlen(buff_new_filename) > 256 || (strncmp(argv[j], buff_new_filename, strlen(buff_new_filename)) == 0))
 					{
-						printf("Введите новое имя файла для возможности сохранения файла в архив c неболее 255 символами!: ");
+						if(strncmp(argv[j], buff_new_filename, strlen(buff_new_filename)) == 0)
+						{
+							printf("Новое имя повторяется с именем уже находящегося файла в архиве. Введите имя неповторяющееся с тем именем файла, что есть в архиве!\n");
+						}if(strlen(buff_new_filename) == 0){
+							printf("Нулевая длина нового имени записываемого файла воспринята как отмена операции добавления файла в архив.\n");
+							printf("Программа заверщает работу!\n");
+							exit(0);
+						}
+						
+						printf("Введите новое имя файла для возможности сохранения файла в архив c не более 255 символами и неповторяющимся именем c учетом типа файла!: ");
 						scanf("%s", buff_new_filename);
 					}
 
@@ -680,6 +721,9 @@ void func_write_in_arch(int argc,char** argv,int i, int fd_file_arch, struct sta
 			}
 
 			close(file);
+		}else{
+			printf("При попытке добавление файла %s в архив было обнаружено, что файла не существует в рабочей директории!\n", argv[j]);
+			printf("Файл %s \033[1;33mНе добавлен в архив\033[0m!\n", argv[j]);
 		}
 	}
 }

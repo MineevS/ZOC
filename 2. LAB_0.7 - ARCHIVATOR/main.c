@@ -95,6 +95,7 @@ int main(int argc, char** argv)
 			printf("input file(s)\n");
 			
 			func_input_in_arch(argc, argv, directory, dir, entry, file_st);
+			
 			break;
 		case(1):
 			printf("extract file(s)\n");
@@ -320,7 +321,8 @@ int main(int argc, char** argv)
 			
 			printf("1. Добавление файлов в архив: -input file_1 ..., --input file_1 ...\n");//+
 			printf("2. Изьятия файлов из архива: -extract file_1 ..., --extract file_1 ...\n");//+
-			//printf("3. Удаление файлов из архива: -delete file_1 ..., --delete file_1 ...\n");//-
+			printf("3. Удаление файлов из архива: -delete file_1 ..., --delete file_1 ...\n");//-
+			printf("В аргументах командной строки должен быть указан архив - файл с типом \".kmb\". явно!");
 			
 			printf("По умолчанию вызов команды с архивом и файлами автоматически добавляет файлы в архив!\n");
 			break;
@@ -329,7 +331,7 @@ int main(int argc, char** argv)
 
 			if(argc > 1)
 			{
-				printf("????o? ???y ??????.\n");
+				//printf("????o? ???y ??????.\n");
 				
 				int f = 0;
 
@@ -361,11 +363,11 @@ int main(int argc, char** argv)
 								
 								if(file_arch_st.st_size == 0)
 								{
-									printf("?????");
+									//printf("?????");
 								}
 								else
 								{
-									printf("??????");
+									//printf("??????");
 									
 									for(size_t j = 0; j < argc; j++)
 									{
@@ -452,7 +454,6 @@ int main(int argc, char** argv)
 												}
 											}
 											
-
 											fwrite(mas, sizeof(char), size_f_1, file_arch);
 											fwrite(mas+(size_f_1+fb[flg])*sizeof(char), sizeof(char), size_f_2, file_arch);
 											fflush(file_arch);
@@ -491,12 +492,11 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 {
 	if(argc > 1)
 	{
-		printf("\x1b[1;32mЗапущен процесс создания или открытия архива!\x1b[0m\n");
-
 		//// Проверка наличия файла в директории:
 		dir = opendir(directory);
 		if(!dir) exit(-1);
-		int f = 0;
+		int FLAG_ARCH = 0;
+		int num = 0;
 		
 		for(size_t i = 1; i < argc; i++)// Цикал аргументных имен архивов; 
 		{
@@ -520,7 +520,7 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 
 					if((file_arch = fopen(file_name, "r+b")) != 0)
 					{
-						f = 1;
+						FLAG_ARCH = 1;
 						fstatat(fd, file_name, &file_arch_st, 0);
 
 						if(file_arch_st.st_size == 0)
@@ -544,11 +544,16 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 					fclose(file_arch);
 				}
 			}
+			
+			
+			if(!FLAG_ARCH){// Если архив не обнаружен!	
 
-			if(!f){// Если архив не обнаружен!	
+				//if(strncmp(strrev(strmemcp(argv[i])),strrev(strmemcp(".kmb")), 4) != 0) continue;
 
-				if(strncmp(strrev(strmemcp(argv[i])),strrev(strmemcp(".kmb")), 4) != 0) continue;
-
+				if(strncmp(strrev(strmemcp(argv[i])),strrev(strmemcp(".kmb")), 4) != 0){
+					num +=1;
+				}
+				
 				printf("Архив с именем \033[35m%s\033[0m не обнаружен в данной директории\n", argv[i]);
 				printf("Создать архив с именем \033[32m%s\033[0m: ", argv[i]);
 
@@ -566,11 +571,18 @@ void func_input_in_arch(int argc,char** argv,char* directory, DIR* dir,struct di
 					{
 						func_write_in_arch(argc, argv, i, file_arch, file_st, 0);
 					}
+					
 					break;
 				default:
 					break;
 				}
 			}
+		}
+		
+		if(num == argc){
+			printf("В командной строке в качестве аргумента не обнаружен файл с типом \".kmb\".\n");
+			printf("В аргументах командной строки должен быть указан архив - файл с типом \".kmb\". явно!");
+			printf("Работа программы прекращена!");
 		}
 	}
 }
