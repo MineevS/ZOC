@@ -115,6 +115,7 @@ int main(int argc, char** argv)
 							struct stat file_arch_st;
 
 							if(strncmp(strrev(strmemcp(file_name)), strrev(strmemcp(".kmb")), 4) != 0) continue;
+							
 							if((fd_file_arch = open(file_name, O_RDONLY)) != 0)
 							{
 								f = 1;
@@ -134,9 +135,22 @@ int main(int argc, char** argv)
 										
 										if(((stat(argv[j], &file_st))!= -1) && (strncmp(argv[j],"-",1) != 0) && strcmp(argv[i],argv[j]) != 0)
 										{
-											printf("Файл с именем \033[1;32m%s[0m уже существует в той директории, где находится и сам архив!\n", argv[j]);
-											printf("Файл \033[1;32m%s\033[0m - не извлечен!\n", argv[j]);
-											continue;
+											printf("Файл с именем \033[1;32m%s\033[0m уже существует в той директории, где находится и сам архив!\n", argv[j]);
+
+											printf("Если в архиве найдется файл с таким же именем, то перезаписать уже существующий файл: ");
+
+											switch(getchar())
+											{
+											case('Y'):
+												printf("\nЕсли в архиве найдется файл с таким же именем, то Файл будет перезаписан!\n");
+												break;
+											case('y'):
+												printf("\nЕсли в архиве найдется файл с таким же именем, то Файл будет перезаписан!\n");
+												break;
+											default:
+												printf("Файл \033[1;32m%s\033[0m - не извлечен!\n", argv[j]);
+												continue;
+											}
 										}
 
 										size_t a = 0; long pos = 0;                          
@@ -197,18 +211,20 @@ int main(int argc, char** argv)
 											if(strstr(argv[0], argv[j]) != NULL) continue;// argv[0]="./gdb", argv[j]="gdb"
 											
 											int file_f;
-											if((file_f = open(argv[j], O_RDWR | O_CREAT, S_IRUSR| S_IWUSR| S_IRGRP))!= 0){
-												
+											if((file_f = open(argv[j], O_RDWR | O_CREAT| O_TRUNC, S_IRUSR| S_IWUSR| S_IRGRP))!= 0)
+											{
 												write(file_f, mas, sizeof(char)*fb);
 												
 												chmod(argv[j], fmode);
 											}
 											
 											close(file_f);
+										}else{
+											
+											printf("Файл с именем в архиве не обнаружен! \n");
 										}
 									}
 								}
-
 								close(fd_file_arch);
 							}
 						}
