@@ -1,0 +1,7 @@
+all: Prog1 Prog2
+
+Prog1:
+	./Prog_1
+
+Prog2:
+	./Prog_2
