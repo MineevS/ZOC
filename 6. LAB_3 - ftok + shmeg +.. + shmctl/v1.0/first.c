@@ -98,8 +98,6 @@ int main(int argc, char** argv)
 			{
 				printf("Error: ./Prog_2 alraydy running!\n");
 			}
-		
-			sleep(4);
 			
 			shmdt(ptr_to_shm);
 			shmctl(shmem_id, IPC_RMID, NULL);
