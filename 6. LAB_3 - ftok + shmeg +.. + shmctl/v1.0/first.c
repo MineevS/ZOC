@@ -69,40 +69,43 @@ int main(int argc, char** argv)
 	}
 
 	//Создание SHM:
-	while(1){
-	int shmem_id = shmget(ipc_key, 1*sizeof(data_struct), IPC_CREAT | 0666 );
+	while(1)
+	{
+		int shmem_id = shmget(ipc_key, 1*sizeof(data_struct), IPC_CREAT | 0666 );
 
-	if(shmem_id == -1){
-		printf("shmget error: %s\n", strerror(errno));
-		exit(-4);
-	}else{
-		printf("PROGRAMM: \033[1;36m1\033[0m\n");
-		//printf("[shmem_id = %d]\n", shmem_id);
-		
-		data_struct* ptr_to_shm = (data_struct*)shmat(shmem_id, NULL, 0);
-		
-		if(ptr_to_shm == (void*)(-1)){
-			printf("SHMEM attach failed with code: %s\n", strerror(errno));
-			exit(-5);
+		if(shmem_id == -1){
+			printf("shmget error: %s\n", strerror(errno));
+			exit(-4);
 		}else{
+			printf("PROGRAMM: \033[1;36m1\033[0m\n");
+			//printf("[shmem_id = %d]\n", shmem_id);
 			
-			((data_struct*)ptr_to_shm)->ttime = time(0);
-			((data_struct*)ptr_to_shm)->pid = getpid();
+			data_struct* ptr_to_shm = (data_struct*)shmat(shmem_id, NULL, 0);
+			
+			if(ptr_to_shm == (void*)(-1)){
+				printf("SHMEM attach failed with code: %s\n", strerror(errno));
+				exit(-5);
+			}else{
+				
+				((data_struct*)ptr_to_shm)->ttime = time(0);
+				((data_struct*)ptr_to_shm)->pid = getpid();
 
-			printf("Place in shm: \n [ttime: \033[31m%s\033[0m]\n "
-				"[pid: \033[31m%d\033[0m]\n", 
-				timeTostring(((data_struct*)ptr_to_shm)->ttime), 
-				((data_struct*)ptr_to_shm)->pid);
-	
-			if(system("./Prog_2") == (-1))
-			{
-				printf("Error: ./Prog_2 alraydy running!\n");
+				printf("Place in shm: \n [ttime: \033[31m%s\033[0m]\n "
+					"[pid: \033[31m%d\033[0m]\n", 
+					timeTostring(((data_struct*)ptr_to_shm)->ttime), 
+					((data_struct*)ptr_to_shm)->pid);
+		
+				if(system("./Prog_2") == (-1))
+				{
+					printf("Error: ./Prog_2 alraydy running!\n");
+				}
+				
+				sleep(4);
+
+				shmdt(ptr_to_shm);
+				shmctl(shmem_id, IPC_RMID, NULL);
 			}
-			
-			shmdt(ptr_to_shm);
-			shmctl(shmem_id, IPC_RMID, NULL);
 		}
-	}
 	}
 
 	return 0;
