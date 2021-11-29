@@ -12,17 +12,21 @@
 #include <signal.h>
 
 #define FILE_NAME "main.c"
+#define ERROR_CREATE_THREAD -11
+#define ERROR_JOIN_THREAD   -12
 
 struct DATA
 {
-        int SIZE;
-        int* mas;
-        int count;
+	int SIZE;
+	int* mas;
+	int count;
+	
 	pthread_t* pth_read_tid_s;
 	pthread_t pth_write_tid;
+	pthread_mutex_t mutex;
 };
 
-pthread_mutex_t lock;
+//pthread_mutex_t mutex;
 
 void my_handler(int signum)
 {
@@ -45,41 +49,43 @@ void* pTh_fun_write(void* data)
 {
 	for(int i = 0; i < ((struct DATA*)data)->SIZE; i++)
 	{
-		pthread_mutex_lock(&lock);
-
+		pthread_mutex_lock(&((struct DATA*)data)-> mutex);
+	
 		((struct DATA*)data)->mas[i] = (((struct DATA*)data)->count += 1);
-
-		pthread_mutex_unlock(&lock);
 		
-		pthread_kill(pthread_self(), SIGUSR1);// Посылаем сигнал "Болванку", 
-						      // для того, чтобы записывающий 
-						      // поток мог возобновить работу.
+		pthread_kill( ((struct DATA*)data)->pth_read_tid_s[i], SIGUSR2);
+
+		pthread_mutex_unlock(&((struct DATA*)data)->mutex);
+
+		pthread_kill(((struct DATA*)data)->pth_write_tid, SIGUSR1);
+		
+		sleep(1);
+		
 		//fflush(NULL);// В некоторых случаях 
 		//требуется поместить сигнал в стек сигналов 
 		//и сразу выполнить этот сигнал. 
 		//В нашем случае этого не требуется т. к. 
 		//нужно, чтобы текущий поток был удален.
 	}
-
+	
 	pthread_exit(NULL);
 }
 
 void* pTh_fun_read(void* data)
 {
-	pthread_mutex_lock(&lock);
+	pthread_mutex_lock(&((struct DATA*)data)-> mutex);
 
-		printf("[TID: \033[1;31m%lu\033[0m]\n", pthread_self() );
+		printf("[TID: \033[1;31m%lu\033[0m]\n",  pthread_self());
 
 	for(int i = 0; i < ((struct DATA*)data)->SIZE; i++){
 		printf("MAS[\033[1;32m%d\033[0m] = \033[1;33m%d\033[0m ; \n", i, ((struct DATA*)data)->mas[i]);
 	}
-
-	pthread_mutex_unlock(&lock);
-	
-	pthread_kill(((struct DATA*)data)->pth_write_tid, SIGUSR2);
-	
 	//fflush(NULL);
 
+	pthread_mutex_unlock(&((struct DATA*)data)-> mutex);
+
+	pthread_kill(((struct DATA*)data)->pth_write_tid, SIGUSR2);	// Возобновляем работу потока, который ранее был поставлен на паузу.
+	
 	pthread_exit(NULL);
 }
 
@@ -98,27 +104,31 @@ int main(void)
 	data_1.pth_read_tid_s  = (pthread_t*) malloc( data_1.SIZE * sizeof(pthread_t));
 
 	pthread_create( &data_1.pth_write_tid, NULL,  pTh_fun_write, (void*)&data_1 );
-	//pthread_join( pth_write_tid, NULL );// Ожидания Завершения работы этого потока не требуется. 
-					      // т. к. если мы будем ожидать, то основной поток будет 
-					      // находится в ожидании и не сможет создать потоки на чтение.
+	
+	pthread_mutex_init(&data_1.mutex, NULL);
 
-	// переводим в отсоединенный режим
-	pthread_detach(data_1.pth_write_tid);// Отделяем записывающий поток от основного.
+	pthread_mutex_lock(&data_1.mutex);
+	
+	//pthread_detach(data_1.pth_write_tid);
 
 	for(int i = 0; i < data_1.SIZE; i++){
 
-		pthread_create( &data_1.pth_read_tid_s[i], NULL,  pTh_fun_read, (void*)&data_1 );
-		pthread_join( data_1.pth_read_tid_s[i], NULL ); // Ожидание пока поток завершит работу.
-		
-		sleep(1); // Небольшая задержка текущего потока, 
-			  // чтобы успеть проконтрольровать весь вывод информации в консоль.
+		int crt_status = pthread_create( &data_1.pth_read_tid_s[i], NULL,  pTh_fun_read, (void*)&data_1 );
+		if (crt_status != 0) {
+        		printf("main error: can't create thread, status = %d\n", crt_status);
+        		exit(ERROR_CREATE_THREAD);
+    		}else{
+			//printf("TID: %lu \n", data_1.pth_read_tid_s[i] );
+		}
+
+		pthread_kill( data_1.pth_read_tid_s[i], SIGUSR1); // Ставим поток на поузу.
 	}
 
-	 fflush(NULL);// Очистка стека сигналов. Если не очистить стек сигналов, 
-		      // то при повторном запуске программы, программа получит 
-		      // последний сигнал из стека и при обработке сначало может 
-		      // запуститься поток на чтения, а уже потом на запись, 
-		      // чего бы нам хотелось избежать.
+	pthread_mutex_unlock(&data_1.mutex);
+	
+	//fflush(NULL);
+	
+	pthread_join(data_1.pth_write_tid, NULL);
 
 	return 0;
 }
