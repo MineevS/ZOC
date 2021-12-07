@@ -126,9 +126,10 @@ int main(void)
 
 	pthread_mutex_unlock(&data_1.mutex);
 	
-	//fflush(NULL);
-	
 	pthread_join(data_1.pth_write_tid, NULL);
+	
+	pthread_cond_destroy(&data_1.cond);
+    pthread_mutex_destroy(&data_1.mutex);
 
 	return 0;
 }
